@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -185,44 +184,49 @@ func (a *Ignore) isEnabled() bool {
 	return a.enabled
 }
 
-func (a *Ignore) prepareClipboardFiles(ctx context.Context, paths []string) ([]string, error) {
+func (a *Ignore) prepareClipboardFiles(ctx context.Context, files clipboard.FileList) (clipboard.PreparedFileList, error) {
+	paths := files.Paths
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
-		return nil, err
+		return clipboard.PreparedFileList{}, err
 	}
 	root := filepath.Join(cacheDir, "Ignore", "clipboard-staging")
 	if err := os.MkdirAll(root, 0o755); err != nil {
-		return nil, err
+		return clipboard.PreparedFileList{}, err
 	}
 	a.pruneClipboardStaging(root)
 	stage := filepath.Join(root, time.Now().Format("20060102-150405.000000000"))
 	if err := os.MkdirAll(stage, 0o755); err != nil {
-		return nil, err
+		return clipboard.PreparedFileList{}, err
 	}
 	filtered := make([]string, 0, len(paths))
-	usedNames := make(map[string]struct{}, len(paths))
-	for _, path := range paths {
+	cutSources := make([]struct {
+		path  string
+		isDir bool
+	}, 0, len(paths))
+	for i, path := range paths {
 		if ctx.Err() != nil {
-			return filtered, ctx.Err()
+			return clipboard.PreparedFileList{Paths: filtered}, ctx.Err()
 		}
 		info, err := os.Stat(path)
 		if err != nil {
 			a.logger.Warn("clipboard path stat failed", "path", path, "error", err)
 			continue
 		}
-		decision := a.rules.Match(path, info.IsDir())
-		if decision.Ignored {
-			if info.IsDir() {
-				a.metrics.AddSkippedDir()
-			} else {
-				a.metrics.AddSkippedFile()
-			}
-			a.logger.Info("clipboard item ignored", "path", path, "rule", decision.Rule)
+		needsFilter, ignoredRoot, err := a.clipboardPathNeedsFiltering(path, info.IsDir())
+		if err != nil {
+			a.logger.Warn("clipboard filter scan failed", "path", path, "error", err)
+		}
+		if ignoredRoot {
+			a.addIgnoredMetric(info.IsDir())
 			continue
 		}
-		targetName := windowsCopyName(filepath.Dir(path), filepath.Base(path), usedNames)
-		usedNames[strings.ToLower(targetName)] = struct{}{}
-		target := filepath.Join(stage, targetName)
+		if !needsFilter {
+			filtered = append(filtered, path)
+			continue
+		}
+		itemStage := filepath.Join(stage, fmt.Sprintf("%04d", i))
+		target := filepath.Join(itemStage, filepath.Base(path))
 		result, err := a.engine.CopyFiltered(ctx, path, target)
 		if err != nil {
 			a.logger.Warn("clipboard staging copy failed", "path", path, "target", target, "error", err)
@@ -232,13 +236,139 @@ func (a *Ignore) prepareClipboardFiles(ctx context.Context, paths []string) ([]s
 			continue
 		}
 		filtered = append(filtered, target)
+		if files.DropEffect == clipboard.DropEffectMove {
+			cutSources = append(cutSources, struct {
+				path  string
+				isDir bool
+			}{path: path, isDir: info.IsDir()})
+		}
 	}
 	if len(filtered) == 0 {
 		_ = os.RemoveAll(stage)
-		return nil, nil
+		return clipboard.PreparedFileList{}, nil
+	}
+	if sameStringSet(paths, filtered) {
+		_ = os.RemoveAll(stage)
+		return clipboard.PreparedFileList{Paths: paths}, nil
 	}
 	a.logger.Info("clipboard staging prepared", "inputItems", len(paths), "outputItems", len(filtered), "stage", stage)
-	return filtered, nil
+	prepared := clipboard.PreparedFileList{Paths: filtered}
+	if len(cutSources) > 0 {
+		prepared.AfterMovePaste = func() {
+			for _, source := range cutSources {
+				if err := a.deleteFilteredSource(source.path, source.isDir); err != nil {
+					a.logger.Warn("clipboard cut source cleanup failed", "path", source.path, "error", err)
+				}
+			}
+		}
+	}
+	return prepared, nil
+}
+
+func (a *Ignore) clipboardPathNeedsFiltering(path string, isDir bool) (needsFilter bool, ignoredRoot bool, err error) {
+	decision := a.rules.Match(path, isDir)
+	if decision.Ignored {
+		a.logger.Info("clipboard item ignored", "path", path, "rule", decision.Rule)
+		return true, true, nil
+	}
+	if !isDir {
+		return false, false, nil
+	}
+	walkErr := filepath.WalkDir(path, func(current string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if current == path {
+			return nil
+		}
+		decision := a.rules.Match(current, d.IsDir())
+		if !decision.Ignored {
+			return nil
+		}
+		if d.IsDir() {
+			a.logger.Info("clipboard directory will be filtered", "path", current, "rule", decision.Rule)
+			return errClipboardFilteringNeeded
+		}
+		a.logger.Info("clipboard file will be filtered", "path", current, "rule", decision.Rule)
+		return errClipboardFilteringNeeded
+	})
+	if errors.Is(walkErr, errClipboardFilteringNeeded) {
+		return true, false, nil
+	}
+	if walkErr != nil {
+		return true, false, walkErr
+	}
+	return false, false, nil
+}
+
+var errClipboardFilteringNeeded = errors.New("clipboard filtering needed")
+
+func (a *Ignore) addIgnoredMetric(isDir bool) {
+	if isDir {
+		a.metrics.AddSkippedDir()
+	} else {
+		a.metrics.AddSkippedFile()
+	}
+}
+
+func sameStringSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func (a *Ignore) deleteFilteredSource(path string, isDir bool) error {
+	if !isDir {
+		decision := a.rules.Match(path, false)
+		if decision.Ignored {
+			return nil
+		}
+		return os.Remove(path)
+	}
+	var dirs []string
+	err := filepath.WalkDir(path, func(current string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			a.logger.Warn("cut cleanup walk failed", "path", current, "error", walkErr)
+			if d != nil && d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if current == path {
+			dirs = append(dirs, current)
+			return nil
+		}
+		decision := a.rules.Match(current, d.IsDir())
+		if decision.Ignored {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.IsDir() {
+			dirs = append(dirs, current)
+			return nil
+		}
+		if err := os.Remove(current); err != nil && !errors.Is(err, os.ErrNotExist) {
+			a.logger.Warn("cut cleanup file remove failed", "path", current, "error", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	for i := len(dirs) - 1; i >= 0; i-- {
+		if err := os.Remove(dirs[i]); err != nil && !errors.Is(err, os.ErrNotExist) {
+			a.logger.Debug("cut cleanup directory kept", "path", dirs[i], "error", err)
+		}
+	}
+	return nil
 }
 
 func (a *Ignore) pruneClipboardStaging(root string) {
@@ -254,41 +384,6 @@ func (a *Ignore) pruneClipboardStaging(root string) {
 		info, err := entry.Info()
 		if err == nil && info.ModTime().Before(cutoff) {
 			_ = os.RemoveAll(filepath.Join(root, entry.Name()))
-		}
-	}
-}
-
-func uniqueStagePath(dir, name string) string {
-	path := filepath.Join(dir, name)
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return path
-	}
-	ext := filepath.Ext(name)
-	base := name[:len(name)-len(ext)]
-	for i := 2; ; i++ {
-		candidate := filepath.Join(dir, base+"-"+strconv.Itoa(i)+ext)
-		if _, err := os.Stat(candidate); os.IsNotExist(err) {
-			return candidate
-		}
-	}
-}
-
-func windowsCopyName(originalDir, name string, used map[string]struct{}) string {
-	ext := filepath.Ext(name)
-	base := name[:len(name)-len(ext)]
-	for i := 1; ; i++ {
-		candidate := ""
-		if i == 1 {
-			candidate = base + " - Copy" + ext
-		} else {
-			candidate = base + " - Copy (" + strconv.Itoa(i) + ")" + ext
-		}
-		key := strings.ToLower(candidate)
-		if _, ok := used[key]; ok {
-			continue
-		}
-		if _, err := os.Stat(filepath.Join(originalDir, candidate)); os.IsNotExist(err) {
-			return candidate
 		}
 	}
 }

@@ -3,6 +3,7 @@
 package clipboard
 
 import (
+	"encoding/binary"
 	"syscall"
 	"unsafe"
 
@@ -31,6 +32,7 @@ var (
 	procGlobalLock              = kernel32.NewProc("GlobalLock")
 	procGlobalUnlock            = kernel32.NewProc("GlobalUnlock")
 	procGlobalFree              = kernel32.NewProc("GlobalFree")
+	procRegisterClipboardFormat = user32.NewProc("RegisterClipboardFormatW")
 )
 
 type dropPoint struct {
@@ -72,10 +74,10 @@ func readFiles() (FileList, error) {
 		procDragQueryFile.Call(handle, i, uintptr(unsafe.Pointer(&buf[0])), length+1)
 		paths = append(paths, syscall.UTF16ToString(buf))
 	}
-	return FileList{Sequence: sequence, Paths: paths}, nil
+	return FileList{Sequence: sequence, Paths: paths, DropEffect: readPreferredDropEffect()}, nil
 }
 
-func writeFiles(paths []string) error {
+func writeFiles(paths []string, dropEffect uint32) error {
 	if len(paths) == 0 {
 		if ok, _, err := procOpenClipboard.Call(0); ok == 0 {
 			return err
@@ -124,10 +126,89 @@ func writeFiles(paths []string) error {
 		procGlobalFree.Call(mem)
 		return err
 	}
+	if dropEffect != 0 {
+		if err := setPreferredDropEffect(dropEffect); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 func currentSequence() uint32 {
 	seq, _, _ := procGetClipboardSequenceNum.Call()
 	return uint32(seq)
+}
+
+func preferredDropEffectFormat() uintptr {
+	return registeredClipboardFormat("Preferred DropEffect")
+}
+
+func performedDropEffectFormat() uintptr {
+	return registeredClipboardFormat("Performed DropEffect")
+}
+
+func registeredClipboardFormat(formatName string) uintptr {
+	name := syscall.StringToUTF16Ptr(formatName)
+	format, _, _ := procRegisterClipboardFormat.Call(uintptr(unsafe.Pointer(name)))
+	return format
+}
+
+func readPreferredDropEffect() uint32 {
+	effect := readDropEffectUnlocked(preferredDropEffectFormat())
+	if effect == 0 {
+		return DropEffectCopy
+	}
+	return effect
+}
+
+func readPerformedDropEffect() uint32 {
+	if ok, _, _ := procOpenClipboard.Call(0); ok == 0 {
+		return 0
+	}
+	defer procCloseClipboard.Call()
+	return readDropEffectUnlocked(performedDropEffectFormat())
+}
+
+func readDropEffectUnlocked(format uintptr) uint32 {
+	if format == 0 {
+		return 0
+	}
+	if ok, _, _ := procIsClipboardFormatAvail.Call(format); ok == 0 {
+		return 0
+	}
+	handle, _, _ := procGetClipboardData.Call(format)
+	if handle == 0 {
+		return 0
+	}
+	ptr, _, _ := procGlobalLock.Call(handle)
+	if ptr == 0 {
+		return 0
+	}
+	defer procGlobalUnlock.Call(handle)
+	raw := unsafe.Slice((*byte)(unsafe.Pointer(ptr)), 4)
+	return binary.LittleEndian.Uint32(raw)
+}
+
+func setPreferredDropEffect(dropEffect uint32) error {
+	format := preferredDropEffectFormat()
+	if format == 0 {
+		return nil
+	}
+	mem, _, err := procGlobalAlloc.Call(gmemMoveable|gmemZeroInit, 4)
+	if mem == 0 {
+		return err
+	}
+	ptr, _, err := procGlobalLock.Call(mem)
+	if ptr == 0 {
+		procGlobalFree.Call(mem)
+		return err
+	}
+	raw := unsafe.Slice((*byte)(unsafe.Pointer(ptr)), 4)
+	binary.LittleEndian.PutUint32(raw, dropEffect)
+	procGlobalUnlock.Call(mem)
+	if data, _, err := procSetClipboardData.Call(format, mem); data == 0 {
+		procGlobalFree.Call(mem)
+		return err
+	}
+	return nil
 }
