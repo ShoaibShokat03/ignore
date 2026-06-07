@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Ignore - Smart Project Transfers</title>
+<meta name="description" content="Automatically exclude unwanted files and folders during project transfers using .ignore rules.">
+
+<link rel="icon" href="./build/bin/icon.ico" type="image/x-icon">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+:root{
+    --primary:#0A84FF;
+    --secondary:#29C7FF;
+    --text:#111827;
+    --muted:#6B7280;
+    --border:#E5E7EB;
+    --bg:#FFFFFF;
+    --code:#F8FAFC;
+}
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+html{
+    scroll-behavior:smooth;
+}
+
+body{
+    font-family:'Inter',sans-serif;
+    background:var(--bg);
+    color:var(--text);
+}
+
+.container{
+    max-width:920px;
+    margin:0 auto;
+    padding:80px 24px;
+}
+
+.hero{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:80px;
+    min-height:80vh;
+}
+
+.hero-left{
+    flex:0 0 320px;
+    text-align:center;
+}
+
+.hero-left img{
+    width:100%;
+    max-width:320px;
+    height:auto;
+}
+
+.hero-right{
+    flex:1;
+    max-width:600px;
+    gap: 20px;
+}
+
+
+.hero-right h1{
+    font-size:72px;
+    font-weight:800;
+    letter-spacing:-3px;
+    color:#0F172A;
+    margin-bottom:24px;
+    line-height:1;
+}
+
+.hero-right p{
+    font-size:20px;
+    line-height:1.9;
+    color:#64748B;
+    margin-bottom:36px;
+}
+
+.hero-right span{
+    color:#0A84FF;
+    font-weight:600;
+}
+
+.download-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:18px 34px;
+    background:#0A84FF;
+    color:#fff;
+    text-decoration:none;
+    border-radius:8px;
+    font-size:17px;
+    font-weight:700;
+}
+
+.version{
+    margin-top:16px;
+    color:#64748B;
+    font-size:15px;
+}
+
+@media (max-width: 900px){
+
+    .hero{
+        flex-direction:column;
+        text-align:center;
+        gap:40px;
+        min-height:auto;
+    }
+
+    .hero-left{
+        flex:none;
+    }
+
+    .hero-right{
+        max-width:100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 20px;
+    }
+
+    .hero-right h1{
+        font-size:52px;
+    }
+
+    .hero-right p{
+        font-size:18px;
+    }
+}
+
+.logo{
+    width:160px;
+    max-width:100%;
+    margin-bottom:36px;
+}
+
+h1{
+    font-size:72px;
+    font-weight:800;
+    letter-spacing:-3px;
+    line-height:1;
+    margin-bottom:24px;
+}
+
+.subtitle{
+    max-width:720px;
+    margin:0 auto;
+    font-size:20px;
+    line-height:1.9;
+    color:var(--muted);
+}
+
+.download-area{
+    margin-top:48px;
+}
+
+.download-btn,.why-ignore-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    text-decoration:none;
+    background:var(--primary);
+    color:#fff;
+    padding:18px 36px;
+    font-size:17px;
+    font-weight:700;
+    border-radius:8px;
+    transition:0.2s;
+}
+
+.download-btn:hover{
+    opacity:.92;
+}
+.why-ignore-btn{
+    background: white;
+    color: var(--primary);
+    border: 2px solid var(--primary);
+}
+
+.version{
+    margin-top:16px;
+    font-size:14px;
+    color:var(--muted);
+}
+
+.section{
+    margin-top:90px;
+    border-top:1px solid var(--border);
+    padding-top:50px;
+}
+
+.section h2{
+    font-size:32px;
+    font-weight:700;
+    margin-bottom:20px;
+}
+
+.section p{
+    color:var(--muted);
+    line-height:1.9;
+    font-size:17px;
+    margin-bottom:18px;
+}
+
+.code{
+    margin-top:24px;
+    background:var(--code);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:22px;
+    overflow:auto;
+}
+
+.code pre{
+    font-family:Consolas, monospace;
+    font-size:15px;
+    line-height:1.8;
+}
+
+.highlight{
+    color:var(--primary);
+    font-weight:600;
+}
+
+.features{
+    margin-top:24px;
+}
+
+.features ul{
+    list-style:none;
+}
+
+.features li{
+    padding:10px 0;
+    color:var(--muted);
+    font-size:16px;
+}
+
+.features li::before{
+    content:"•";
+    color:var(--primary);
+    margin-right:10px;
+}
+
+@media(max-width:768px){
+
+    .container{
+        padding:60px 20px;
+    }
+
+    h1{
+        font-size:48px;
+        letter-spacing:-2px;
+    }
+
+    .subtitle{
+        font-size:18px;
+    }
+
+    .logo{
+        width:120px;
+    }
+
+    .section h2{
+        font-size:28px;
+    }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+   <section class="hero">
+
+    <div class="hero-left">
+        <img src="./assets/logo-bg.png" alt="Ignore Logo">
+    </div>
+
+    <div class="hero-right">
+
+        <h1><span>Meet </span>Ignore</h1>
+
+        <p>
+            Automatically exclude unwanted files and folders during project transfers using
+            <span>.ignore</span> rules. Inspired by the simplicity of
+            <span>.gitignore</span>, built for developers who want cleaner, faster and smarter project sharing.
+        </p>
+
+        <a href="./build/bin/Ignore-Setup.exe" class="download-btn">
+            Download for Windows
+        </a>
+        <a class="why-ignore-btn" href="#why-ignore">Why Ignore</a>
+    </div>
+
+</section>
+
+    <section class="section" id="why-ignore">
+
+        <h2>Why Ignore?</h2>
+
+        <p>
+            Modern projects often contain thousands of unnecessary files such as caches,
+            build outputs, dependencies and temporary artifacts. These files increase
+            transfer times, upload sizes and storage usage.
+        </p>
+
+        <p>
+            Ignore automatically excludes those files using simple
+            <strong>.ignore</strong> rules, allowing you to transfer only what actually matters.
+        </p>
+
+        <div class="features">
+            <ul>
+                <li>Simple .ignore rule system</li>
+                <li>Inspired by .gitignore</li>
+                <li>Fast and lightweight</li>
+                <li>Built for developers</li>
+                <li>Clean project transfers</li>
+                <li>Works with large projects</li>
+                <li>Easy global configuration</li>
+            </ul>
+        </div>
+
+    </section>
+
+    <section class="section">
+
+        <h2>.ignore Example</h2>
+
+        <p>
+            Create a <strong>.ignore</strong> file and define files or folders that should never be transferred.
+        </p>
+
+        <div class="code">
+<pre># Ignore project dependencies
+
+[IGNORE]
+
+node_modules
+vendor
+dist
+build
+.next
+.git
+
+.env
+.env.local
+
+*.log
+*.tmp
+*.cache
+*.bak</pre>
+        </div>
+
+    </section>
+
+</div>
+
+</body>
+</html>
