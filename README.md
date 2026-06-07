@@ -118,6 +118,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-release.ps1
 
 Public website downloads should be signed with a trusted code-signing certificate. See [Code signing and SmartScreen](docs/code-signing-and-smartscreen.md).
 
+For Microsoft Store distribution, use the MSIX package upload route. See [Microsoft Store release plan](docs/microsoft-store-release.md).
+
 ## Installer
 
 After `wails build`, point either installer template at the generated executable:
@@ -133,4 +135,6 @@ Both templates install the executable, create Start Menu entries, and optionally
 - [Performance notes](docs/performance.md)
 - [Windows integration notes](docs/windows-integration.md)
 - [Code signing and SmartScreen](docs/code-signing-and-smartscreen.md)
+- [Microsoft Store release plan](docs/microsoft-store-release.md)
+- [Privacy policy](docs/privacy-policy.md)
 - [Example ignore files](examples/)
