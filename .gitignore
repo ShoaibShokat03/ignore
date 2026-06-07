@@ -1,0 +1,30 @@
+# Build outputs
+/build/
+/dist/
+/tmp/
+/installer/dist/
+/ignore.exe
+/Ignore.exe
+!/build/
+/build/*
+!/build/appicon.png
+!/build/windows/
+/build/windows/*
+!/build/windows/icon.ico
+!/build/windows/icon-16.png
+!/build/windows/icon-32.png
+!/build/windows/icon-48.png
+!/build/windows/icon-256.png
+/build/windows/installer/tmp/
+
+# Frontend dependencies and caches
+/ui/node_modules/
+/ui/dist/
+
+# Wails generated development files
+/ui/wailsjs/
+
+# Logs and local config
+*.log
+*.tmp
+*.cache

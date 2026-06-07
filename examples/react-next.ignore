@@ -1,0 +1,18 @@
+# Project rules for React and Next.js repositories
+
+[IGNORE]
+
+node_modules
+.next
+out
+coverage
+.turbo
+.vercel
+dist
+build
+
+*.log
+.env
+.env.local
+.env.production.local
+

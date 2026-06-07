@@ -1,0 +1,26 @@
+# Global rules for all projects
+
+[IGNORE]
+
+node_modules
+vendor
+vendors
+dist
+build
+.next
+.nuxt
+.git
+.svn
+.hg
+
+.env
+.env.local
+.env.*.local
+
+*.log
+*.tmp
+*.cache
+*.bak
+Thumbs.db
+.DS_Store
+

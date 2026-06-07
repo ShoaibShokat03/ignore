@@ -1,0 +1,20 @@
+# Project rules for Unity and Flutter projects
+
+[IGNORE]
+
+Library
+Temp
+Obj
+Build
+Builds
+Logs
+UserSettings
+
+.dart_tool
+build
+.flutter-plugins
+.flutter-plugins-dependencies
+
+*.log
+*.tmp
+

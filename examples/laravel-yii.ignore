@@ -1,0 +1,15 @@
+# Project rules for Laravel and Yii2 repositories
+
+[IGNORE]
+
+vendor
+node_modules
+storage/logs
+storage/framework/cache
+runtime
+web/assets
+
+.env
+*.log
+*.cache
+
