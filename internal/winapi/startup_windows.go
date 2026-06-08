@@ -3,6 +3,7 @@
 package winapi
 
 import (
+	"errors"
 	"os/exec"
 	"strconv"
 
@@ -18,7 +19,11 @@ func SetStartup(name, exePath string, enabled bool) error {
 	}
 	defer key.Close()
 	if !enabled {
-		return key.DeleteValue(name)
+		err := key.DeleteValue(name)
+		if errors.Is(err, registry.ErrNotExist) {
+			return nil
+		}
+		return err
 	}
 	// Launch with --background so a login start comes up hidden in the tray
 	// (protection running) instead of popping the window open.

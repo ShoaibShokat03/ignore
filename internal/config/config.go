@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -39,7 +40,7 @@ func NewStore() (*Store, error) {
 	}
 	cfg := Config{
 		Enabled:          true,
-		StartWithWindows: false,
+		StartWithWindows: true,
 		WorkerCount:      0,
 		BufferSize:       1024 * 1024,
 		GlobalIgnorePath: filepath.Join(home, ".ignore"),
@@ -75,6 +76,7 @@ func (s *Store) Load() error {
 	if err != nil {
 		return err
 	}
+	b = []byte(strings.TrimPrefix(string(b), "\ufeff"))
 	cfg := s.cfg
 	if err := json.Unmarshal(b, &cfg); err != nil {
 		return err
@@ -113,13 +115,16 @@ func ensureGlobalIgnore(path string) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	const sample = `# Global rules for all projects
+	return os.WriteFile(path, []byte(DefaultIgnoreContent()), 0o644)
+}
 
-[IGNORE]
+func DefaultIgnoreContent() string {
+	return `# Ignore rules
+# You can paste .gitignore content directly into this file.
 
-node_modules
-vendor
-vendors
+node_modules/
+vendor/
+vendors/
 dist
 build
 .next
@@ -133,5 +138,4 @@ build
 *.cache
 *.bak
 `
-	return os.WriteFile(path, []byte(sample), 0o644)
 }

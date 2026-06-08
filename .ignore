@@ -1,0 +1,18 @@
+# Ignore rules
+# You can paste .gitignore content directly into this file.
+
+node_modules/
+vendor/
+vendors/
+dist
+build
+.next
+.git
+
+.env
+.env.local
+
+*.log
+*.tmp
+*.cache
+*.bak

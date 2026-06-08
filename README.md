@@ -12,6 +12,7 @@ The app is built with Go and Wails, uses a minimal React UI, lives in the Window
 - Enable/disable protection state
 - Start with Windows registration through `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
 - Explorer clipboard fallback for normal copy/paste file lists
+- Explorer right-click menu entry to create a `.ignore` file in the selected folder/current folder background
 - Rule reload with cache invalidation
 - Project-level `.ignore` support
 - High-performance filtered copy engine using `filepath.WalkDir`, bounded workers, streaming I/O, buffer reuse, context cancellation, timestamp preservation, and graceful per-file errors
@@ -39,7 +40,12 @@ Project rules live at:
 <ProjectRoot>\.ignore
 ```
 
-Only lines after `[IGNORE]` are active. Empty lines and `#` comments are ignored. Rules are case-insensitive on Windows. Project rules extend global rules. A project rule prefixed with `!` overrides a previous ignore rule.
+Ignore supports two rule-file styles:
+
+- `.gitignore` style: if there is no `[IGNORE]` marker, the whole file is parsed as active rules. This means you can copy a `.gitignore` file, rename it to `.ignore`, and keep the same content.
+- Section style: if `[IGNORE]` exists, only lines after `[IGNORE]` are active. This keeps older Ignore files compatible.
+
+Empty lines and `#` comments are ignored. Rules are case-insensitive on Windows. Project rules extend global rules. A project rule prefixed with `!` overrides a previous ignore rule.
 
 ```txt
 # ignored until the marker
@@ -64,6 +70,10 @@ build
 # project-level override example
 !keep.log
 ```
+
+Common `.gitignore` syntax is supported, including folder rules like `node_modules/`, root-anchored rules like `/dist`, path rules like `src/**/cache`, wildcards like `*.log`, and negation like `!keep.log`.
+
+On Windows, Ignore registers a per-user Explorer context menu item named **Create .ignore file** for folders and folder backgrounds. It creates `.ignore` only when the file does not already exist.
 
 ## Build
 

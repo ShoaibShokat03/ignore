@@ -114,6 +114,8 @@ func (a *Ignore) Startup(ctx context.Context) {
 	a.logger.Info("application startup")
 
 	cfg := a.store.Get()
+	a.syncStartupRegistration(cfg)
+	a.syncContextMenuRegistration()
 	a.watcher = watcher.New(a.logger, 300*time.Millisecond, func(path string) {
 		if err := a.rules.Reload(); err != nil {
 			a.logger.Warn("rule reload failed", "path", path, "error", err)
@@ -430,7 +432,38 @@ func (a *Ignore) SetStartWithWindows(enabled bool) error {
 	if err := winapi.SetStartup("Ignore", exe, enabled); err != nil {
 		return err
 	}
+	_ = winapi.SetStartup("Ingore", "", false)
 	return a.store.Update(func(c *config.Config) { c.StartWithWindows = enabled })
+}
+
+func (a *Ignore) syncStartupRegistration(cfg config.Config) {
+	_ = winapi.SetStartup("Ingore", "", false)
+	if !cfg.StartWithWindows {
+		return
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		a.logger.Warn("startup registration skipped", "error", err)
+		return
+	}
+	if err := winapi.SetStartup("Ignore", exe, true); err != nil {
+		a.logger.Warn("startup registration repair failed", "error", err)
+		return
+	}
+	a.logger.Info("startup registration verified", "path", exe)
+}
+
+func (a *Ignore) syncContextMenuRegistration() {
+	exe, err := os.Executable()
+	if err != nil {
+		a.logger.Warn("context menu registration skipped", "error", err)
+		return
+	}
+	if err := winapi.SetCreateIgnoreContextMenu(exe, true); err != nil {
+		a.logger.Warn("context menu registration failed", "error", err)
+		return
+	}
+	a.logger.Info("context menu registration verified", "path", exe)
 }
 
 func (a *Ignore) CopyFiltered(src, dst string) (copyengine.Result, error) {

@@ -136,8 +136,8 @@ copy /Y "build\windows\icon.ico" "ui\public\brand\favicon.ico" >nul
 taskkill /F /IM "Ignore.exe" >nul 2>nul
 if exist "build\bin" rmdir /s /q "build\bin"
 
-echo Building Ignore installer...
-%WAILS_EXE% build -nsis
+echo Building optimized Ignore installer...
+%WAILS_EXE% build -nsis -trimpath -ldflags "-s -w" -webview2 download
 if errorlevel 1 (
   echo Build or installer creation failed.
   pause
@@ -211,6 +211,10 @@ echo.
 echo NOTE: If the verifier says the artifacts are unsigned, Windows SmartScreen
 echo may block website downloads as an unrecognized app. Configure a trusted
 echo code-signing certificate before public release.
+echo.
+
+echo Build sizes:
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$files=@('build\bin\Ignore.exe','build\bin\Ignore-Setup.exe'); foreach($f in $files){ if(Test-Path $f){ $i=Get-Item $f; '{0}: {1:N2} MB' -f $i.Name, ($i.Length/1MB) } }"
 echo.
 
 set "SETUP_EXE="

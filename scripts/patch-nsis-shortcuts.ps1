@@ -26,6 +26,11 @@ if (!(Test-Path $toolsPath)) {
 $nsi = @'
 Unicode true
 
+# Keep the public installer compact without using executable packers such as UPX,
+# which can hurt antivirus/SmartScreen trust for new apps.
+SetCompressor /SOLID lzma
+SetCompressorDictSize 64
+
 ####
 ## This file is written by scripts\patch-nsis-shortcuts.ps1 after `wails build`.
 ## Edit the script, not this file - Wails regenerates it and the script overwrites it.
@@ -90,6 +95,7 @@ Section
     SetOutPath $INSTDIR
 
     !insertmacro wails.files
+    File /oname=icon.ico "..\icon.ico"
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}" "" "$INSTDIR\${PRODUCT_EXECUTABLE}" 0
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}" "" "$INSTDIR\${PRODUCT_EXECUTABLE}" 0

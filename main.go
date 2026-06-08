@@ -12,6 +12,13 @@ import (
 var assets embed.FS
 
 func main() {
+	handled, err := app.RunCommandLine()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if handled {
+		return
+	}
 	ignore, err := app.New(assets)
 	if err != nil {
 		log.Fatal(err)

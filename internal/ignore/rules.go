@@ -4,14 +4,20 @@ import (
 	"bufio"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 )
 
 type Rule struct {
-	Pattern string
-	Negate  bool
+	Pattern  string
+	Negate   bool
+	DirOnly  bool
+	Anchored bool
+	HasSlash bool
+	Root     string
 }
 
 type RuleSet struct {
@@ -57,12 +63,10 @@ func (r *RuleSet) Match(path string, isDir bool) Decision {
 		dir = filepath.Dir(path)
 	}
 	rules := r.rulesFor(dir)
-	relName := filepath.Base(path)
-	normalized := strings.ToLower(filepath.Clean(path))
 	ignored := false
 	var matched string
 	for _, rule := range rules {
-		if matchRule(rule.Pattern, relName, normalized) {
+		if matchRule(rule, path, isDir) {
 			ignored = !rule.Negate
 			matched = rule.Pattern
 		}
@@ -138,16 +142,35 @@ func ParseFile(path string) ([]Rule, error) {
 		return nil, err
 	}
 	defer f.Close()
-	return Parse(f)
+	rules, err := Parse(f)
+	if err != nil {
+		return nil, err
+	}
+	root := filepath.Dir(path)
+	for i := range rules {
+		rules[i].Root = root
+	}
+	return rules, nil
 }
 
 func Parse(rd io.Reader) ([]Rule, error) {
 	scanner := bufio.NewScanner(rd)
 	scanner.Buffer(make([]byte, 1024), 1024*1024)
-	active := false
-	rules := make([]Rule, 0, 64)
+	lines := make([]string, 0, 64)
+	hasIgnoreSection := false
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
+		if strings.EqualFold(line, "[IGNORE]") {
+			hasIgnoreSection = true
+		}
+		lines = append(lines, line)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	active := !hasIgnoreSection
+	rules := make([]Rule, 0, 64)
+	for _, line := range lines {
 		if strings.EqualFold(line, "[IGNORE]") {
 			active = true
 			continue
@@ -155,32 +178,120 @@ func Parse(rd io.Reader) ([]Rule, error) {
 		if !active || line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		rule := Rule{Pattern: filepath.Clean(line)}
-		if strings.HasPrefix(rule.Pattern, "!") {
-			rule.Negate = true
-			rule.Pattern = strings.TrimPrefix(rule.Pattern, "!")
-		}
-		rule.Pattern = strings.Trim(rule.Pattern, `/\`)
+		rule := parseLine(line)
 		if rule.Pattern != "" {
 			rules = append(rules, rule)
 		}
 	}
-	return rules, scanner.Err()
+	return rules, nil
 }
 
-func matchRule(pattern, base, normalizedPath string) bool {
-	pattern = strings.ToLower(strings.Trim(pattern, `/\`))
-	base = strings.ToLower(base)
-	if pattern == base {
-		return true
+func parseLine(line string) Rule {
+	line = strings.TrimSpace(strings.TrimPrefix(line, "\ufeff"))
+	rule := Rule{}
+	if strings.HasPrefix(line, `\#`) {
+		line = strings.TrimPrefix(line, `\`)
 	}
-	if strings.ContainsAny(pattern, "*?[") {
-		if ok, _ := filepath.Match(pattern, base); ok {
-			return true
+	if strings.HasPrefix(line, "!") {
+		rule.Negate = true
+		line = strings.TrimPrefix(line, "!")
+		if strings.HasPrefix(line, `\#`) {
+			line = strings.TrimPrefix(line, `\`)
 		}
 	}
-	if strings.Contains(pattern, string(filepath.Separator)) {
-		return strings.HasSuffix(normalizedPath, strings.ToLower(filepath.Clean(pattern)))
+	line = strings.TrimSpace(filepath.ToSlash(line))
+	if line == "" || line == "." {
+		return Rule{}
 	}
-	return false
+	if strings.HasSuffix(line, "/") {
+		rule.DirOnly = true
+		line = strings.TrimRight(line, "/")
+	}
+	if strings.HasPrefix(line, "/") {
+		rule.Anchored = true
+		line = strings.TrimLeft(line, "/")
+	}
+	line = path.Clean(line)
+	line = strings.Trim(line, "/")
+	if line == "." || line == "" {
+		return Rule{}
+	}
+	rule.HasSlash = strings.Contains(line, "/")
+	rule.Pattern = line
+	return rule
+}
+
+func matchRule(rule Rule, filePath string, isDir bool) bool {
+	if rule.Pattern == "" || (rule.DirOnly && !isDir) {
+		return false
+	}
+	rel := normalizedRulePath(rule, filePath)
+	base := path.Base(rel)
+	pattern := strings.ToLower(filepath.ToSlash(rule.Pattern))
+
+	if rule.Anchored {
+		return globMatch(pattern, rel)
+	}
+	if !rule.HasSlash && !strings.ContainsAny(pattern, "*?[") {
+		return base == pattern
+	}
+	if !rule.HasSlash {
+		return globMatch(pattern, base)
+	}
+	if globMatch(pattern, rel) {
+		return true
+	}
+	return globMatch("**/"+pattern, rel)
+}
+
+func normalizedRulePath(rule Rule, filePath string) string {
+	clean := filepath.Clean(filePath)
+	if rule.Root != "" {
+		if rel, err := filepath.Rel(rule.Root, clean); err == nil && rel != "." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != ".." {
+			return strings.ToLower(filepath.ToSlash(rel))
+		}
+	}
+	return strings.ToLower(filepath.ToSlash(clean))
+}
+
+func globMatch(pattern, value string) bool {
+	if ok, _ := path.Match(pattern, value); ok {
+		return true
+	}
+	rx, err := globRegex(pattern)
+	if err != nil {
+		return false
+	}
+	return rx.MatchString(value)
+}
+
+func globRegex(pattern string) (*regexp.Regexp, error) {
+	var b strings.Builder
+	b.WriteString("^")
+	for i := 0; i < len(pattern); i++ {
+		ch := pattern[i]
+		switch ch {
+		case '*':
+			if i+1 < len(pattern) && pattern[i+1] == '*' {
+				i++
+				if i+1 < len(pattern) && pattern[i+1] == '/' {
+					i++
+					b.WriteString("(?:.*/)?")
+				} else {
+					b.WriteString(".*")
+				}
+			} else {
+				b.WriteString(`[^/]*`)
+			}
+		case '?':
+			b.WriteString(`[^/]`)
+		case '.', '+', '(', ')', '|', '^', '$', '{', '}', '[', ']', '\\':
+			b.WriteByte('\\')
+			b.WriteByte(ch)
+		default:
+			b.WriteByte(ch)
+		}
+	}
+	b.WriteString("$")
+	return regexp.Compile(b.String())
 }

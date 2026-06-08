@@ -50,6 +50,7 @@ var (
 	procCreateWindowEx      = user32.NewProc("CreateWindowExW")
 	procDefWindowProc       = user32.NewProc("DefWindowProcW")
 	procDestroyWindow       = user32.NewProc("DestroyWindow")
+	procDestroyIcon         = user32.NewProc("DestroyIcon")
 	procLoadImage           = user32.NewProc("LoadImageW")
 	procCreatePopupMenu     = user32.NewProc("CreatePopupMenu")
 	procAppendMenu          = user32.NewProc("AppendMenuW")
@@ -63,6 +64,7 @@ var (
 	procPostMessage         = user32.NewProc("PostMessageW")
 	procPostQuitMessage     = user32.NewProc("PostQuitMessage")
 	procGetModuleHandle     = kernel32.NewProc("GetModuleHandleW")
+	procExtractIconEx       = shell32.NewProc("ExtractIconExW")
 	procShellNotifyIcon     = shell32.NewProc("Shell_NotifyIconW")
 	activeTray              atomic.Pointer[shellTray]
 )
@@ -118,6 +120,7 @@ type shellTray struct {
 	log     *slog.Logger
 	actions Actions
 	hwnd    windows.Handle
+	hicon   windows.Handle
 	iconID  uint32
 }
 
@@ -184,6 +187,7 @@ func (t *shellTray) createWindow() (windows.Handle, error) {
 
 func (t *shellTray) addIcon() error {
 	hicon := loadTrayIcon()
+	t.hicon = windows.Handle(hicon)
 	nid := notifyIconData{
 		Size:            uint32(unsafe.Sizeof(notifyIconData{})),
 		HWnd:            t.hwnd,
@@ -201,6 +205,9 @@ func (t *shellTray) addIcon() error {
 }
 
 func loadTrayIcon() uintptr {
+	if hicon := extractAppIconFromExe(); hicon != 0 {
+		return hicon
+	}
 	for _, path := range trayIconCandidates() {
 		p, err := windows.UTF16PtrFromString(path)
 		if err != nil {
@@ -213,6 +220,29 @@ func loadTrayIcon() uintptr {
 	}
 	hicon, _, _ := procLoadImage.Call(0, uintptr(idiApplication), imageIcon, 0, 0, lrShared)
 	return hicon
+}
+
+func extractAppIconFromExe() uintptr {
+	exe, err := os.Executable()
+	if err != nil || exe == "" {
+		return 0
+	}
+	p, err := windows.UTF16PtrFromString(exe)
+	if err != nil {
+		return 0
+	}
+	var small windows.Handle
+	count, _, _ := procExtractIconEx.Call(
+		uintptr(unsafe.Pointer(p)),
+		0,
+		0,
+		uintptr(unsafe.Pointer(&small)),
+		1,
+	)
+	if count == 0 || small == 0 {
+		return 0
+	}
+	return uintptr(small)
 }
 
 func trayIconCandidates() []string {
@@ -234,6 +264,10 @@ func (t *shellTray) deleteIcon() {
 		ID:   t.iconID,
 	}
 	procShellNotifyIcon.Call(nimDelete, uintptr(unsafe.Pointer(&nid)))
+	if t.hicon != 0 {
+		procDestroyIcon.Call(uintptr(t.hicon))
+		t.hicon = 0
+	}
 }
 
 func (t *shellTray) showMenu() {

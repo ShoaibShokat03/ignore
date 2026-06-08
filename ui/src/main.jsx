@@ -10,7 +10,7 @@ const fallback = {
     config: { startWithWindows: false, globalIgnorePath: '%USERPROFILE%\\.ignore', logDir: '' },
     metrics: { filesCopied: 0, filesSkipped: 0, directoriesSkipped: 0, errors: 0, bytesCopied: 0, operations: 0, lastActivity: 'No activity yet', lastDurationMs: 0 }
   }),
-  ReadGlobalIgnore: async () => '# Global rules for all projects\n\n[IGNORE]\n\nnode_modules\nvendor\ndist\nbuild\n.next\n.git\n\n.env\n*.log\n*.tmp\n',
+  ReadGlobalIgnore: async () => '# Global rules for all projects\n# You can paste .gitignore content directly here.\n\nnode_modules/\nvendor/\ndist\nbuild\n.next\n.git\n\n.env\n*.log\n*.tmp\n',
   SaveGlobalIgnore: async () => {},
   ReloadRules: async () => {},
   SetEnabled: async () => {},
@@ -307,13 +307,13 @@ function App() {
 
               <div className="guideBlock">
                 <h3>Creating an .ignore file</h3>
-                <p>Create a file named `.ignore` in your Windows user folder for global rules, or inside a project folder for project-specific rules.</p>
+                <p>Create a file named `.ignore` in your Windows user folder for global rules, or inside a project folder for project-specific rules. You can copy a `.gitignore` file, rename it to `.ignore`, and keep the same content.</p>
                 <pre className="miniCode">{`# Rules above this line are ignored
 
 [IGNORE]
 
-node_modules
-vendor
+node_modules/
+vendor/
 dist
 build
 .next
@@ -323,7 +323,7 @@ build
 *.log
 *.tmp
 *.cache`}</pre>
-                <p>Rules only work after `[IGNORE]`. Empty lines and lines starting with `#` are skipped. Folder names match recursively, and wildcards like `*.log` are supported.</p>
+                <p>If `[IGNORE]` exists, rules only work after it. If `[IGNORE]` is not present, the whole file is treated like a `.gitignore` file. Folder rules like `node_modules/`, root rules like `/dist`, wildcards like `*.log`, path rules like `src/**/cache`, and negation like `!keep.log` are supported.</p>
               </div>
 
               <div className="profileBlock">

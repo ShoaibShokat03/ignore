@@ -251,7 +251,7 @@ h1{
 }
 
 .features li::before{
-    content:"•";
+    content:"\2022";
     color:var(--primary);
     margin-right:10px;
 }
@@ -301,7 +301,7 @@ h1{
             <span>.gitignore</span>, built for developers who want cleaner, faster and smarter project sharing.
         </p>
 
-        <a href="./ignore-setup/Ignore.zip" class="download-btn">
+        <a href="https://github.com/ShoaibShokat03/ignore-setup/archive/refs/heads/main.zip" class="download-btn">
             Download for Windows
         </a>
         <a class="why-ignore-btn" href="#why-ignore">Why Ignore</a>
@@ -343,20 +343,19 @@ h1{
         <h2>.ignore Example</h2>
 
         <p>
-            Create a <strong>.ignore</strong> file and define files or folders that should never be transferred.
+            Create a <strong>.ignore</strong> file with gitignore-style rules, or copy your existing
+            <strong>.gitignore</strong> content into it for project-specific cleanup.
         </p>
 
         <div class="code">
-<pre># Ignore project dependencies
+<pre># Ignore project dependencies and build output
 
-[IGNORE]
-
-node_modules
-vendor
-dist
-build
-.next
-.git
+node_modules/
+vendor/
+dist/
+build/
+.next/
+.git/
 
 .env
 .env.local
